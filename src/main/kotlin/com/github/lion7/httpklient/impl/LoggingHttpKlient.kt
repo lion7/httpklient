@@ -4,15 +4,16 @@ import com.github.lion7.httpklient.BodyReader
 import com.github.lion7.httpklient.BodyWriter
 import com.github.lion7.httpklient.HttpExchange
 import com.github.lion7.httpklient.HttpKlient
+import com.github.lion7.httpklient.HttpKlientOptions
 import com.github.lion7.httpklient.HttpRequest
 import com.github.lion7.httpklient.HttpResponse
-import java.io.File
-import java.io.InputStream
-import java.io.OutputStream
 import org.apache.commons.io.input.TeeInputStream
 import org.apache.commons.io.output.TeeOutputStream
+import java.io.BufferedInputStream
+import java.io.InputStream
+import java.io.OutputStream
 
-class LoggingHttpKlient(logFile: File, delegate: HttpKlient) : DelegatingHttpKlient(delegate), AutoCloseable {
+class LoggingHttpKlient(stream: OutputStream, private val delegate: HttpKlient) : AbstractHttpKlient() {
 
     companion object {
         private val BEGIN_SEPARATOR = ("#".repeat(16) + " BEGIN " + "#".repeat(14) + "\r\n").toByteArray()
@@ -21,20 +22,22 @@ class LoggingHttpKlient(logFile: File, delegate: HttpKlient) : DelegatingHttpKli
         private val END_SEPARATOR = ("\r\n" + "#".repeat(16) + " END " + "#".repeat(15) + "\r\n\r\n").toByteArray()
     }
 
-    private val logStream = logFile.outputStream().buffered()
+    override val options: HttpKlientOptions = delegate.options
 
-    init {
-        Runtime.getRuntime().addShutdownHook(Thread { close() })
-    }
+    private val logStream = stream.buffered()
 
     override fun <T> exchange(request: HttpRequest, bodyReader: BodyReader<T>, errorReader: BodyReader<*>): HttpExchange<T> = try {
         logStream.write(BEGIN_SEPARATOR)
-        super.exchange(request.copy(bodyWriter = LoggingBodyWriter(request)), LoggingBodyReader(bodyReader), LoggingBodyReader(errorReader))
+        when (delegate) {
+            is AbstractHttpKlient -> super.exchange(request, LoggingBodyReader(bodyReader), LoggingBodyReader(errorReader))
+            else -> delegate.exchange(request.copy(bodyWriter = LoggingBodyWriter(request)), LoggingBodyReader(bodyReader), LoggingBodyReader(errorReader))
+        }
     } finally {
         logStream.write(END_SEPARATOR)
     }
 
-    override fun close() = logStream.close()
+    override fun <T> exchange(request: HttpRequest, responseHandler: (HttpResponse<BufferedInputStream>) -> HttpResponse<T>): HttpResponse<T> =
+        (delegate as AbstractHttpKlient).exchange(request.copy(bodyWriter = LoggingBodyWriter(request)), responseHandler)
 
     inner class LoggingBodyWriter(private val request: HttpRequest) : BodyWriter by request.bodyWriter {
         override fun write(outputStream: OutputStream) {

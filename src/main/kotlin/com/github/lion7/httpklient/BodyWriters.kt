@@ -13,6 +13,7 @@ import com.github.lion7.httpklient.writers.StringBodyWriter
 import com.github.lion7.httpklient.writers.XmlBodyWriter
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.file.FileSystemNotFoundException
 import java.nio.file.FileSystems
 import java.nio.file.Path
@@ -77,7 +78,12 @@ object BodyWriters {
     @JvmStatic
     @JvmOverloads
     fun <V : Any> ofJson(value: V, objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules(), contentType: String = MediaTypes.APPLICATION_JSON_UTF_8) =
-        JsonBodyWriter(value, objectMapper, contentType)
+        JsonBodyWriter(value, objectMapper::writeValue, contentType)
+
+    @JvmStatic
+    @JvmOverloads
+    fun <V : Any> ofJson(value: V, serializer: (OutputStream, V) -> Unit, contentType: String = MediaTypes.APPLICATION_JSON_UTF_8) =
+        JsonBodyWriter(value, serializer, contentType)
 
     @JvmStatic
     @JvmOverloads

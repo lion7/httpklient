@@ -12,10 +12,11 @@ import com.github.lion7.httpklient.readers.StringBodyReader
 import com.github.lion7.httpklient.readers.XmlBodyReader
 import com.github.lion7.httpklient.soap.SoapBodyReader
 import com.github.lion7.httpklient.soap.SoapMessageBodyReader
+import org.w3c.dom.Node
+import java.io.InputStream
 import java.lang.reflect.Type
 import javax.xml.bind.JAXBContext
 import javax.xml.soap.SOAPMessage
-import org.w3c.dom.Node
 
 object BodyReaders {
 
@@ -49,14 +50,21 @@ object BodyReaders {
     @JvmStatic
     @JvmOverloads
     fun <V : Any> ofJson(type: Class<V>, objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules(), accept: String = MediaTypes.APPLICATION_JSON_UTF_8) =
-        JsonBodyReader(object : TypeReference<V>() {
-            override fun getType(): Type = type
-        }, objectMapper, accept)
+        JsonBodyReader(accept) {
+            objectMapper.readValue(it, object : TypeReference<V>() {
+                override fun getType(): Type = type
+            })
+        }
 
     @JvmStatic
     @JvmOverloads
     fun <V : Any> ofJson(type: TypeReference<V>, objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules(), accept: String = MediaTypes.APPLICATION_JSON_UTF_8) =
-        JsonBodyReader(type, objectMapper, accept)
+        JsonBodyReader(accept) { objectMapper.readValue(it, type) }
+
+    @JvmStatic
+    @JvmOverloads
+    fun <V : Any> ofJson(deserializer: (InputStream) -> V, accept: String = MediaTypes.APPLICATION_JSON_UTF_8) =
+        JsonBodyReader(accept, deserializer)
 
     @JvmStatic
     @JvmOverloads
@@ -73,15 +81,15 @@ object BodyReaders {
     ) = SoapBodyReader(type, jaxbContext, nodeExtractor, mtomEnabled)
 
     inline fun <reified V : Any> ofJson(objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules(), accept: String = MediaTypes.APPLICATION_JSON_UTF_8) =
-        JsonBodyReader(object : TypeReference<V>() {}, objectMapper, accept)
+        JsonBodyReader(accept) { objectMapper.readValue(it, object : TypeReference<V>() {}) }
 
     inline fun <reified V : Any> ofJsonList(objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules(), accept: String = MediaTypes.APPLICATION_JSON_UTF_8) =
-        JsonBodyReader(object : TypeReference<List<V>>() {}, objectMapper, accept)
+        JsonBodyReader(accept) { objectMapper.readValue(it, object : TypeReference<List<V>>() {}) }
 
     inline fun <reified K : Any, reified V : Any> ofJsonMap(
         objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules(),
         accept: String = MediaTypes.APPLICATION_JSON_UTF_8
-    ) = JsonBodyReader(object : TypeReference<Map<K, V>>() {}, objectMapper, accept)
+    ) = JsonBodyReader(accept) { objectMapper.readValue(it, object : TypeReference<Map<K, V>>() {}) }
 
     inline fun <reified V : Any> ofXml(jaxbContext: JAXBContext = JAXBContext.newInstance(V::class.java), accept: String = MediaTypes.APPLICATION_XML_UTF_8) =
         XmlBodyReader(V::class.java, jaxbContext, accept)
